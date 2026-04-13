@@ -92,6 +92,12 @@ cp commands\codex.md $env:USERPROFILE\.claude\commands\codex.md
 | 第一次 / 无线程 | 少量 | Claude 提炼上下文 |
 | `--fresh` 强制新开 | 少量 | Claude 重新总结 |
 
+## 为什么不能完全共享上下文
+
+Claude 和 Codex 是**两个独立进程**，进程之间天然隔离——即使都在本地运行，一个进程也无法直接读另一个进程的内存。Claude 的对话历史存在 Claude Code 进程里，Codex 启动时只能读到通过命令行传入的字符串。
+
+所以"共享上下文"的唯一方式就是：Claude 把关键信息摘要成文字，通过 prompt 传给 Codex。这也是本 skill 做的事。
+
 ## License
 
 MIT
