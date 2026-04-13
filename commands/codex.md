@@ -1,37 +1,42 @@
 ---
-description: Send a message to Codex with current conversation context attached
-argument-hint: "<anything you want Codex to do or answer>"
+description: Talk to Codex directly. Auto-resumes existing thread (0 Claude tokens) or starts fresh with context summary.
+argument-hint: "[--fresh] <message>"
 context: fork
-allowed-tools: Bash(codex:*)
+allowed-tools: Bash(node:*), Bash(codex:*)
 ---
 
-Forward the user's message to Codex, with relevant conversation context prepended.
+User input: `$ARGUMENTS`
 
-User message: `$ARGUMENTS`
+## Step 1 — Resume or Fresh?
 
-## Steps
+If `$ARGUMENTS` contains `--fresh`, strip it and skip to **Fresh Start**.
 
-1. **Summarize context** (2–5 lines max): Extract what's relevant from the current conversation — what the user is working on, key decisions, relevant files or tech stack. Skip if nothing is relevant.
-
-2. **Build the prompt**:
-
-```
-<context>
-[2–5 line summary. Omit this block entirely if nothing is relevant.]
-</context>
-
-<task>
-$ARGUMENTS
-</task>
-```
-
-3. **Run Codex**:
+Otherwise, check for an active Codex thread:
 
 ```bash
-codex --approval-mode full-auto "<prompt>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task-resume-candidate --json
 ```
 
-- Foreground for quick questions or small tasks.
-- Background (`run_in_background: true`) if the task is clearly long-running or multi-file.
+**If `available: true`** → Resume mode: send just the user's message with `--resume-last`. Claude does nothing else. 0 Claude tokens spent.
 
-4. **Return Codex's output verbatim.** Do not summarize or add commentary.
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --resume-last "<$ARGUMENTS>"
+```
+
+Return Codex output verbatim. Done.
+
+---
+
+**If `available: false`** → Fresh Start (or user passed `--fresh`):
+
+## Step 2 — Summarize Context (Fresh Start only)
+
+Extract what's relevant from the current conversation (2–5 lines max): what the user is working on, key decisions, relevant files or tech stack. Skip if nothing relevant.
+
+## Step 3 — Run Codex
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --write "<context>\n[summary]\n</context>\n\n<task>\n[user message]\n</task>"
+```
+
+Return Codex output verbatim.
