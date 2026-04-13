@@ -1,42 +1,52 @@
 ---
-description: Talk to Codex directly. Auto-resumes existing thread (0 Claude tokens) or starts fresh with context summary.
+description: Talk to Codex directly. Smart resume: 0 tokens if consecutive, Claude summarizes if new context exists.
 argument-hint: "[--fresh] <message>"
 context: fork
-allowed-tools: Bash(node:*), Bash(codex:*)
+allowed-tools: Bash(node:*)
 ---
 
 User input: `$ARGUMENTS`
 
-## Step 1 — Resume or Fresh?
+If `$ARGUMENTS` contains `--fresh`, strip it and go to **Fresh Start**.
 
-If `$ARGUMENTS` contains `--fresh`, strip it and skip to **Fresh Start**.
+---
 
-Otherwise, check for an active Codex thread:
+## Step 1 — Check for active Codex thread
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task-resume-candidate --json
 ```
 
-**If `available: true`** → Resume mode: send just the user's message with `--resume-last`. Claude does nothing else. 0 Claude tokens spent.
+---
+
+### If `available: false` → Fresh Start
+
+Summarize relevant context from the conversation (2–5 lines: what the user is working on, key decisions, tech stack). Then run:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --resume-last "<$ARGUMENTS>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --write "<context>\n[summary]\n</context>\n\n<task>\n$ARGUMENTS\n</task>"
 ```
-
-Return Codex output verbatim. Done.
 
 ---
 
-**If `available: false`** → Fresh Start (or user passed `--fresh`):
+### If `available: true` → Check for new Claude context
 
-## Step 2 — Summarize Context (Fresh Start only)
+Look at the conversation history between the last `/codex` call and now:
 
-Extract what's relevant from the current conversation (2–5 lines max): what the user is working on, key decisions, relevant files or tech stack. Skip if nothing relevant.
-
-## Step 3 — Run Codex
+**No new Claude conversation** (last messages were just `/codex` + Codex output):
+→ Pure resume. Send only the user's new message. 0 Claude tokens.
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --write "<context>\n[summary]\n</context>\n\n<task>\n[user message]\n</task>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --write --resume-last "$ARGUMENTS"
 ```
 
-Return Codex output verbatim.
+**New Claude conversation exists** (user and Claude discussed something in between):
+→ Summarize only the new discussion (2–3 lines), then resume with that context attached.
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task --write --resume-last "<new_context>\n[summary of new discussion only]\n</new_context>\n\n$ARGUMENTS"
+```
+
+---
+
+Return Codex output verbatim. Do not summarize or add commentary.
